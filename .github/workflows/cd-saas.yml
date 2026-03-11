@@ -1,0 +1,135 @@
+name: Deploy SaaS
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      confirm:
+        description: 'Type "deploy" to confirm deployment'
+        required: true
+        default: 'no'
+        type: string
+
+jobs:
+  deploy-saas:
+    if: ${{ github.event.inputs.confirm == 'deploy' }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.0'
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.12.0'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: deploy/models/saas/environments/${{ github.event.inputs.environment }}
+        run: |
+          terraform init -backend-config="bucket=bizbuddy-tfstate-${{ github.event.inputs.environment }}" \
+                        -backend-config="region=${{ secrets.AWS_REGION }}"
+
+      - name: Terraform Plan
+        working-directory: deploy/models/saas/environments/${{ github.event.inputs.environment }}
+        run: |
+          terraform plan -var-file="terraform.tfvars" -out=tfplan
+
+      - name: Manual Approval Required
+        if: github.event.inputs.environment == 'prod'
+        uses: peter-evans/slash-command-dispatch@v2
+        with:
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          reaction-token: ${{ secrets.GITHUB_TOKEN }}
+          dispatch-type: issue
+          command: '/approve'
+
+      - name: Terraform Apply
+        working-directory: deploy/models/saas/environments/${{ github.event.inputs.environment }}
+        run: |
+          terraform apply -auto-approve tfplan
+          # Save kubeconfig
+          terraform output kubeconfig > kubeconfig
+
+      - name: Deploy Application with Helm
+        working-directory: deploy/models/paas
+        env:
+          KUBECONFIG: ${{ github.workspace }}/deploy/models/saas/environments/${{ github.event.inputs.environment }}/kubeconfig
+        run: |
+          # Get ALB URL from terraform output
+          ALB_URL=$(terraform output -raw alb_url 2>/dev/null || echo "")
+          echo "ALB_URL=$ALB_URL" >> $GITHUB_ENV
+
+          # Deploy backend
+          helm upgrade --install bizbuddy-backend charts/bizbuddy-backend \
+            -n bizbuddy --create-namespace \
+            -f values/prod.yaml \
+            --set image.tag=${{ github.sha }} \
+            --wait --timeout 10m
+
+          # Deploy frontend
+          helm upgrade --install bizbuddy-frontend charts/bizbuddy-frontend \
+            -n bizbuddy \
+            -f values/prod.yaml \
+            --set config.REACT_APP_API_URL=${ALB_URL:-http://localhost} \
+            --set image.tag=${{ github.sha }} \
+            --wait --timeout 10m
+
+      - name: Verify Deployment
+        run: |
+          if [ -n "${{ env.ALB_URL }}" ]; then
+            echo "Verifying deployment at ${{ env.ALB_URL }}"
+            # Wait for ALB to be ready
+            for i in {1..30}; do
+              if curl -sf "${{ env.ALB_URL }}/health" > /dev/null; then
+                echo "✅ Health check passed!"
+                break
+              fi
+              echo "Waiting for application... ($i/30)"
+              sleep 10
+            done
+          fi
+
+      - name: Notify Success
+        if: success()
+        run: |
+          echo "✅ SaaS deployment to ${{ github.event.inputs.environment }} successful!"
+          # Send notification
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"🚀 BizBuddy SaaS deployed to ${{ github.event.inputs.environment }} (commit ${{ github.sha }})\n🌐 URL: ${{ env.ALB_URL }}\"}" \
+            ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Notify Failure
+        if: failure()
+        run: |
+          echo "❌ SaaS deployment failed"
+          curl -X POST -H 'Content-type: application/json' \
+            --data "{\"text\":\"❌ BizBuddy SaaS deployment to ${{ github.event.inputs.environment }} FAILED (commit ${{ github.sha }})\"}" \
+            ${{ secrets.SLACK_WEBHOOK_URL }}
+          exit 1

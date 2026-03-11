@@ -1,0 +1,23 @@
+apiVersion: v2
+name: rabbitmq
+description: Open source message broker software that implements the Advanced Message Queuing Protocol (AMQP)
+type: application
+version: 12.0.5
+appVersion: 3.12.9
+icon: https://raw.githubusercontent.com/bitnami/brands/main/logos/rabbitmq.svg
+keywords:
+- rabbitmq
+- message-queue
+- amqp
+- messaging
+home: https://github.com/bitnami/charts/tree/main/bitnami/rabbitmq
+sources:
+- https://github.com/bitnami/containers/tree/main/bitnami/rabbitmq
+maintainers:
+- name: Bitnami
+  url: https://github.com/bitnami
+  email: containers@bitnami.com
+dependencies:
+- name: common
+  version: 2.x
+  repository: oci://registry-1.docker.io/bitnamicharts

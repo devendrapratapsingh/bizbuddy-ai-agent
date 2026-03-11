@@ -1,0 +1,23 @@
+apiVersion: v2
+name: minio
+description: High-performance, S3-compatible object storage
+type: application
+version: 14.1.0
+appVersion: 2024.1.24
+icon: https://raw.githubusercontent.com/bitnami/brands/main/logos/minio.svg
+keywords:
+- minio
+- s3
+- object-storage
+- storage
+home: https://github.com/bitnami/charts/tree/main/bitnami/minio
+sources:
+- https://github.com/bitnami/containers/tree/main/bitnami/minio
+maintainers:
+- name: Bitnami
+  url: https://github.com/bitnami
+  email: containers@bitnami.com
+dependencies:
+- name: common
+  version: 2.x
+  repository: oci://registry-1.docker.io/bitnamicharts

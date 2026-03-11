@@ -1,0 +1,112 @@
+name: Deploy PaaS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy-paas:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci --only=production
+          cd frontend && npm ci && cd ..
+
+      - name: Build backend
+        run: npm run build
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: 'v3.12.0'
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo '${{ secrets.K3S_KUBECONFIG }}' | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+          kubectl cluster-info
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker images
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/bizbuddy-backend:${{ github.sha }} -f Dockerfile .
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/bizbuddy-frontend:${{ github.sha }} -f frontend/Dockerfile frontend/
+          docker push ${{ secrets.DOCKER_USERNAME }}/bizbuddy-backend:${{ github.sha }}
+          docker push ${{ secrets.DOCKER_USERNAME }}/bizbuddy-frontend:${{ github.sha }}
+
+      - name: Deploy with Helm
+        working-directory: deploy/models/paas
+        run: |
+          helm dependency build charts/bizbuddy-backend
+          helm upgrade --install bizbuddy-backend charts/bizbuddy-backend \
+            -n bizbuddy --create-namespace \
+            -f values/dev.yaml \
+            --set image.tag=${{ github.sha }} \
+            --wait --timeout 5m
+          helm upgrade --install bizbuddy-frontend charts/bizbuddy-frontend \
+            -n bizbuddy \
+            -f values/dev.yaml \
+            --set image.tag=${{ github.sha }} \
+            --set config.REACT_APP_API_URL=http://bizbuddy-backend.bizbuddy.svc.cluster.local:3000 \
+            --wait --timeout 5m
+
+      - name: Verify deployment
+        run: |
+          kubectl get pods,svc -n bizbuddy
+          # Wait for pods to be ready
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=bizbuddy-backend -n bizbuddy --timeout=60s
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=bizbuddy-frontend -n bizbuddy --timeout=60s
+          # Test health endpoint
+          kubectl port-forward svc/bizbuddy-backend 8080:3000 -n bizbuddy &
+          sleep 5
+          curl -f http://localhost:8080/health
+          pkill -f "kubectl port-forward"
+
+      - name: Notify success
+        if: success()
+        run: |
+          echo "✅ PaaS deployment successful"
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"✅ BizBuddy PaaS deployed on k3s (commit ${{ github.sha }})\"}" \
+              ${{ secrets.SLACK_WEBHOOK_URL }}
+          fi
+
+      - name: Notify failure
+        if: failure()
+        run: |
+          echo "❌ PaaS deployment failed"
+          if [ -n "${{ secrets.SLACK_WEBHOOK_URL }}" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"text\":\"❌ BizBuddy PaaS deployment FAILED (commit ${{ github.sha }})\"}" \
+              ${{ secrets.SLACK_WEBHOOK_URL }}
+          fi

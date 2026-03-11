@@ -1,0 +1,270 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String   @id @default(cuid())
+  email      String   @unique
+  password   String
+  name       String?
+  role       UserRole @default(USER)
+  tenantId   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant     Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  businesses Business[]
+  sessions   Session[]
+  tokens     Token[]
+
+  @@map("users")
+}
+
+model Business {
+  id            String   @id @default(cuid())
+  name          String
+  domain        String   @unique
+  description   String?
+  logoUrl       String?
+  theme         Json?    // Custom branding and theming
+  settings      Json?    // Business-specific settings
+  userId        String
+  tenantId      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  pipelines     Pipeline[]
+  agents        Agent[]
+  employees     Employee[]
+
+  @@map("businesses")
+}
+
+model Conversation {
+  id            String   @id @default(cuid())
+  businessId    String
+  tenantId      String
+  customerId    String?
+  channel       Channel  @default(CHAT)
+  status        ConversationStatus @default(OPEN)
+  context       Json?    // Conversation context and history
+  metadata      Json?    // Additional metadata
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  business      Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  messages      Message[]
+  pipeline      Pipeline?
+
+  @@map("conversations")
+}
+
+model Message {
+  id            String   @id @default(cuid())
+  conversationId String
+  tenantId      String
+  sender        MessageSender
+  content       String
+  contentType   ContentType @default(TEXT)
+  metadata      Json?    // Message metadata (timestamps, etc.)
+  createdAt     DateTime @default(now())
+
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation  Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model Pipeline {
+  id            String   @id @default(cuid())
+  conversationId String?
+  businessId    String
+  tenantId      String
+  name          String
+  status        PipelineStatus @default(OPEN)
+  tasks         Json?    // Array of tasks with assignments
+  metadata      Json?    // Pipeline metadata
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation  Conversation?
+  business      Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  leads         Lead[]
+
+  @@map("pipelines")
+}
+
+model Lead {
+  id                  String   @id @default(cuid())
+  pipelineId          String
+  tenantId            String
+  name                String
+  email               String?
+  phone               String?
+  company             String?
+  intent              String?  // Recognized intent
+  score               Float?   // Lead qualification score
+  conversionProbability Float? // Conversion probability
+  metadata            Json?    // Lead metadata
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pipeline            Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+
+  @@map("leads")
+}
+
+model Agent {
+  id            String   @id @default(cuid())
+  businessId    String
+  tenantId      String
+  name          String
+  role          String
+  availability  Boolean  @default(true)
+  metadata      Json?    // Agent metadata
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  handoffs      Handoff[]
+
+  @@map("agents")
+}
+
+model Handoff {
+  id            String   @id @default(cuid())
+  conversationId String
+  tenantId      String
+  agentId       String
+  reason        String
+  metadata      Json?    // Handoff metadata
+  createdAt     DateTime @default(now())
+
+  tenant        Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation  Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  agent         Agent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@map("handoffs")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Token {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  type      TokenType
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("tokens")
+}
+
+model Employee {
+  id            String   @id @default(cuid())
+  businessId    String
+  tenantId      String
+  userId        String
+  role          String
+  permissions   Json?    // Employee permissions
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("employees")
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  TRIAL
+  DELETED
+}
+
+model Tenant {
+  id          String        @id @default(cuid())
+  name        String
+  subdomain   String        @unique
+  apiKey      String        @unique
+  status      TenantStatus  @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  businesses  Business[]
+  users       User[]        // Users associated with this tenant
+
+  @@map("tenants")
+}
+
+enum Channel {
+  CHAT
+  VOICE
+  EMAIL
+}
+
+enum ConversationStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+  TRANSFERRED
+}
+
+enum MessageSender {
+  AI
+  HUMAN
+  SYSTEM
+}
+
+enum ContentType {
+  TEXT
+  VOICE
+  IMAGE
+  FILE
+}
+
+enum PipelineStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TokenType {
+  ACCESS
+  REFRESH
+}

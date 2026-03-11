@@ -1,0 +1,222 @@
+# RabbitMQ Helm Chart Values
+# Based on Bitnami RabbitMQ with BizBuddy customizations
+
+global:
+  rabbitmq:
+    username: "bizbuddy"
+    password: "bizbuddy"  # ⚠️ Change in production!
+    adminPassword: "admin"  # ⚠️ Change in production!
+    # For production, use external secret:
+    # existingSecret: "rabbitmq-secrets"
+
+# Deployment configuration
+replicaCount: 1  # For dev; increase to 3 for HA in prod
+
+# Persistent storage
+persistence:
+  enabled: true
+  storageClass: "local-path"
+  accessMode: "ReadWriteOnce"
+  size: "4Gi"
+
+# Resource limits
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+
+# Service configuration
+service:
+  type: ClusterIP
+  ports:
+    amqp: 5672
+    amqps: 5671
+    metrics: 9419
+    management: 15672
+  nodePorts:
+    amqp: ""
+    amqps: ""
+    metrics: ""
+    management: ""
+
+# Network policy
+networkPolicy:
+  enabled: false  # Enable in prod
+  allowExternal: true
+
+# Security context
+securityContext:
+  enabled: true
+  fsGroup: 1001
+  runAsUser: 1001
+
+containerSecurityContext:
+  enabled: true
+  runAsNonRoot: true
+  runAsUser: 1001
+
+# Configuration (RD Configuration)
+configuration: |
+  # Management plugin
+  loopback_users.guest = false
+  # Logging
+  log.console.level = info
+  log.console.formatter = lager
+  # Defaults
+  default_user = bizbuddy
+  default_pass = bizbuddy
+  default_vhost = /
+  # Clustering (for HA)
+  cluster_formation.peer_discovery_backend = rabbit_peer_discovery_classic_config
+  cluster_formation.classic_config.nodes.1 = rabbit@$(RABBITMQ_NODENAME)
+  # Queue master location (for HA)
+  queue_master_locator = min-masters
+  # Load definitions (pre-configured exchanges, queues, users)
+  load_definitions = /etc/rabbitmq/definitions.json
+
+# Pre-configured exchanges, queues, users (definitions.json)
+# We'll create a ConfigMap with this later
+# loadDefinitionConfigMap: "rabbitmq-definitions"
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: false  # Enable in prod
+  minAvailable: 2  # For 3-replica cluster
+
+# Pod anti-affinity (spread across nodes)
+podAntiAffinity:
+  enabled: false  # Enable in prod
+
+  topologyKey: "kubernetes.io/hostname"
+
+# Node selector and tolerations
+nodeSelector: {}
+tolerations: []
+
+priorityClassName: ""
+commonLabels: {}
+commonAnnotations: {}
+
+image:
+  registry: docker.io
+  repository: bitnami/rabbitmq
+  tag: 3.12.9-debian-11-r13
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# Init container (for sysctl settings)
+initContainer:
+  enabled: false
+  image:
+    registry: docker.io
+    repository: bitnami/rabbitmq
+    tag: 3.12.9-debian-11-r13
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+# Enable metrics (Prometheus)
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: false  # Set to true when Prometheus is installed
+    additionalLabels:
+      release: prometheus
+    namespace: monitoring
+    interval: 30s
+    scrapeTimeout: 10s
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+# Enable the RabbitMQ Management Plugin (HTTP API)
+management:
+  plugin:
+    enabled: true
+    image:
+      registry: docker.io
+      repository: bitnami/rabbitmq
+      tag: 3.12.9-debian-11-r13
+      pullPolicy: IfNotPresent
+
+# Extra volumes and mounts (for definitions, SSL certs, etc.)
+extraVolumes: []
+extraVolumeMounts: []
+
+# Extra environment variables
+extraEnvVars: []
+
+# Extra ports
+extraPorts: []
+
+# Probe configuration
+probes:
+  liveness:
+    enabled: true
+    initialDelaySeconds: 120
+    periodSeconds: 30
+    timeoutSeconds: 20
+    successThreshold: 1
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 20
+    successThreshold: 1
+    failureThreshold: 3
+  startup:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 20
+    successThreshold: 1
+    failureThreshold: 3
+
+---
+# Note: For production HA setup:
+# 1. Set replicaCount: 3
+# 2. Enable podAntiAffinity
+# 3. Enable podDisruptionBudget
+# 4. Enable cluster configuration
+# 5. Enable loadDefinitionConfigMap with queues/exchanges definitions
+# 6. Consider using RabbitMQ Federation or Shovel for multi-cluster
+
+# To create definitions.json for BizBuddy event queues:
+# {
+#   "rabbit_version": "3.12.9",
+#   "users": [
+#     {"name": "bizbuddy", "password_hash": "...", "tags": "administrator"}
+#   ],
+#   "vhosts": [
+#     {"name": "/"}
+#   ],
+#   "permissions": [
+#     {"user": "bizbuddy", "vhost": "/", "configure": ".*", "write": ".*", "read": ".*"}
+#   ],
+#   "exchanges": [
+#     {"name": "bizbuddy.events", "type": "topic", "vhost": "/", "durable": true}
+#   ],
+#   "queues": [
+#     {"name": "lead.qualification", "vhost": "/", "durable": true},
+#     {"name": "conversation.created", "vhost": "/", "durable": true},
+#     {"name": "ai.requests", "vhost": "/", "durable": true}
+#   ],
+#   "bindings": [
+#     {"source": "bizbuddy.events", "vhost": "/", "destination": "lead.qualification", "routing_key": "lead.qualified", "arguments": {}},
+#     {"source": "bizbuddy.events", "vhost": "/", "destination": "conversation.created", "routing_key": "conversation.created", "arguments": {}}
+#   ]
+# }

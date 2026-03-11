@@ -1,0 +1,7 @@
+{
+  "model": "liquid/lfm-2.5-1.2b-thinking:free",
+  "provider": "openrouter",
+  "description": "Best free reasoning model - LFM Thinking with chain-of-thought",
+  "contextLength": 32768,
+  "systemPrompt": "You are a deep reasoning assistant. Think step-by-step, consider multiple perspectives, and provide thorough analysis before conclusions."
+}

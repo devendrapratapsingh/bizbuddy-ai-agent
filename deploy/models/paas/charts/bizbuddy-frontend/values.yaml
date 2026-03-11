@@ -1,0 +1,121 @@
+# Default values for bizbuddy-frontend
+
+replicaCount: 1
+
+image:
+  repository: bizbuddy-frontend
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: "bizbuddy-frontend"
+
+serviceAccount:
+  create: false
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 101
+  runAsGroup: 101
+  fsGroup: 101
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 80
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50M"
+    # Custom configuration for SPA routing
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      location / {
+        try_files $uri $uri/ /index.html;
+        expires -1;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+      }
+  hosts:
+    - host: bizbuddy-frontend.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    memory: "256Mi"
+    cpu: "500m"
+  requests:
+    memory: "128Mi"
+    cpu: "200m"
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 80
+
+readinessProbe:
+  enabled: true
+  path: /index.html
+  port: 80
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 3
+
+livenessProbe:
+  enabled: true
+  path: /index.html
+  port: 80
+  initialDelaySeconds: 30
+  periodSeconds: 20
+  timeoutSeconds: 3
+  successThreshold: 1
+  failureThreshold: 3
+
+volumes: []
+volumeMounts: []
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Frontend configuration
+config:
+  REACT_APP_API_URL: "http://bizbuddy-backend:3000"
+  REACT_APP_USE_SSL: "false"
+  REACT_APP_SOCKET_URL: "http://bizbuddy-backend:3000"
+
+# Nginx configuration for SPA
+nginx:
+  enabled: true
+  config:
+    gzip: "on"
+    gzip_http_version: "1.0"
+    gzip_comp_level: "2-6"
+    gzip_min_length: "1024"
+    gzip_types: "text/plain text/css text/xml application/javascript application/json image/svg+xml"
+    client_max_body_size: "50M"
+    proxy_read_timeout: "3600s"
+    proxy_connect_timeout: "75s"

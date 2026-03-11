@@ -1,0 +1,24 @@
+apiVersion: v2
+name: postgresql
+description: Wikimedia PostgreSQL database
+type: application
+version: 15.3.8
+appVersion: 15.4.0
+icon: https://raw.githubusercontent.com/bitnami/brands/main/logos/postgresql.svg
+keywords:
+- postgresql
+- database
+- sql
+- replication
+- cluster
+home: https://github.com/bitnami/charts/tree/main/bitnami/postgresql
+sources:
+- https://github.com/bitnami/containers/tree/main/bitnami/postgresql
+maintainers:
+- name: Bitnami
+  url: https://github.com/bitnami
+  email: containers@bitnami.com
+dependencies:
+- name: common
+  version: 2.x
+  repository: oci://registry-1.docker.io/bitnamicharts

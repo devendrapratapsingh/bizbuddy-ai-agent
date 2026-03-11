@@ -1,0 +1,13 @@
+{{- if .Values.pdb.create -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "bizbuddy-backend.fullname" . }}
+  labels:
+    {{- include "bizbuddy-backend.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "bizbuddy-backend.selectorLabels" . | nindent 6 }}
+{{- end }}

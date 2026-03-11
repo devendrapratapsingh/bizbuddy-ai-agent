@@ -1,0 +1,42 @@
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-path
+  namespace: kube-system
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: rancher.io/local-path
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  storageClass: "local-path"
+  # Optional: set path for persistent volumes
+  # path: "/mnt/disks/ssd1"
+
+---
+
+# Alternative: For production on cloud providers, you'd use:
+# - AWS: StorageClass with gp3 or io2
+# - GCP: StorageClass with pd-ssd or pd-balanced
+# - Azure: StorageClass with managed-csi
+
+# Example AWS EBS StorageClass:
+# apiVersion: storage.k8s.io/v1
+# kind: StorageClass
+# metadata:
+#   name: ebs-gp3
+# provisioner: kubernetes.io/aws-ebs
+# parameters:
+#   type: gp3
+#   fsType: ext4
+# reclaimPolicy: Delete
+# volumeBindingMode: WaitForFirstConsumer
+# allowVolumeExpansion: true
+# # Optional: specify zone for multi-AZ
+# # allowedTopologies:
+# # - matchLabelExpressions:
+# #   - key: topology.ebs.csi.aws.com/zone
+# #     values:
+# #     - us-east-1a

@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "bizbuddy-frontend.fullname" . }}-config
+  labels:
+    {{- include "bizbuddy-frontend.labels" . | nindent 4 }}
+data:
+  REACT_APP_API_URL: {{ .Values.config.REACT_APP_API_URL | quote }}
+  REACT_APP_USE_SSL: {{ .Values.config.REACT_APP_USE_SSL | quote }}
+  REACT_APP_SOCKET_URL: {{ .Values.config.REACT_APP_SOCKET_URL | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "bizbuddy-frontend.fullname" . }}-nginx
+  labels:
+    {{- include "bizbuddy-frontend.labels" . | nindent 4 }}
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        # SPA routing - serve index.html for all routes
+        location / {
+            try_files $uri $uri/ /index.html;
+            expires -1;
+            add_header Cache-Control "no-cache, no-store, must-revalidate";
+        }
+
+        # Static assets - cache for 1 year
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }

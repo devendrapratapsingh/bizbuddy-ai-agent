@@ -1,0 +1,205 @@
+---
+# BizBuddy Cloud-Native Namespace Configuration
+# Organizes all resources into logical groups
+
+# Main application namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bizbuddy
+  labels:
+    name: bizbuddy
+    purpose: "main-application"
+    environment: "development"
+    managed-by: "k8s"
+
+---
+
+# Backend services namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bizbuddy-backend
+  labels:
+    name: bizbuddy-backend
+    purpose: "backend-api"
+    environment: "development"
+    tier: "application"
+    managed-by: "k8s"
+
+---
+
+# Frontend namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bizbuddy-frontend
+  labels:
+    name: bizbuddy-frontend
+    purpose: "frontend-ui"
+    environment: "development"
+    tier: "application"
+    managed-by: "k8s"
+
+---
+
+# Database and data services namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bizbuddy-database
+  labels:
+    name: bizbuddy-database
+    purpose: "databases"
+    environment: "development"
+    tier: "data"
+    managed-by: "k8s"
+
+---
+
+# Messaging and queue services namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bizbuddy-messaging
+  labels:
+    name: bizbuddy-messaging
+    purpose: "message-queues"
+    environment: "development"
+    tier: "infrastructure"
+    managed-by: "k8s"
+
+---
+
+# Monitoring and observability namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bizbuddy-monitoring
+  labels:
+    name: bizbuddy-monitoring
+    purpose: "monitoring-logging-tracing"
+    environment: "development"
+    tier: "observability"
+    managed-by: "k8s"
+
+---
+
+# Security: Network Policies to isolate namespaces
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: bizbuddy
+spec:
+  podSelector: {}
+  policyTypes:
+  - Inbound
+  - Outbound
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-backend
+  namespace: bizbuddy-database
+spec:
+  podSelector: {}
+  policyTypes:
+  - Inbound
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: bizbuddy-backend
+    ports:
+    - protocol: TCP
+      port: 5432
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-backend-and-frontend
+  namespace: bizbuddy-messaging
+spec:
+  podSelector: {}
+  policyTypes:
+  - Inbound
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: bizbuddy-backend
+    - namespaceSelector:
+        matchLabels:
+          name: bizbuddy-frontend
+    ports:
+    - protocol: TCP
+      port: 5672  # RabbitMQ AMQP
+    - protocol: TCP
+      port: 15672 # RabbitMQ management
+
+---
+
+# Resource Quotas (optional, to prevent resource exhaustion)
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: bizbuddy
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    requests.storage: 20Gi
+    count/services: "10"
+    count/deployments.apps: "10"
+    count/replicasets.apps: "20"
+    count/pods: "20"
+
+---
+
+# LimitRanges (default resource limits for pods)
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: bizbuddy
+spec:
+  limits:
+  - default:  # Default limits if not specified
+      memory: "512Mi"
+      cpu: "500m"
+    defaultRequest:  # Default requests if not specified
+      memory: "256Mi"
+      cpu: "250m"
+    type: Container
+    max:
+      memory: "2Gi"
+      cpu: "2000m"
+    min:
+      memory: "64Mi"
+      cpu: "50m"
+
+---
+
+# Notes:
+# - Namespaces provide logical separation of resources
+# - Network Policies enforce security by default-deny
+# - ResourceQuotas prevent any one namespace from consuming all cluster resources
+# - LimitRanges provide sensible defaults for pod resources
+# - These are development-friendly settings; adjust for production
+
+# To apply:
+# kubectl apply -f infra/namespace.yaml
+
+# To verify:
+# kubectl get ns
+# kubectl get networkpolicy --all-namespaces
+# kubectl describe resourcequota -n bizbuddy

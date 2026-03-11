@@ -1,0 +1,23 @@
+apiVersion: v2
+name: bizbuddy-backend
+description: BizBuddy AI Agent Backend - Node.js/Express API with AI capabilities
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - bizbuddy
+  - ai
+  - chatbot
+  - lead-management
+  - nodejs
+  - express
+home: https://github.com/your-org/bizbuddy-ai-agent
+sources:
+  - https://github.com/your-org/bizbuddy-ai-agent
+maintainers:
+  - name: DevOps Team
+    email: devops@bizbuddy.com
+dependencies:
+  - name: common
+    version: 2.x
+    repository: oci://registry-1.docker.io/bitnamicharts

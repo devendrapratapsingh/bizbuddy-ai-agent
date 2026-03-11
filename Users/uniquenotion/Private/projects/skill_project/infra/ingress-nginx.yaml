@@ -1,0 +1,350 @@
+---
+# NGINX Ingress Controller for Kubernetes
+# This provides HTTP/S routing, SSL termination, and reverse proxy
+# Already installed via Helm in k3s-setup.sh, but here's the manual YAML version
+
+apiVersion: v1
+kind: namespace
+metadata:
+  name: ingress-nginx
+  labels:
+    name: ingress-nginx
+
+---
+
+# ServiceAccount for the controller
+apiVersion: v1
+kind: serviceAccount
+metadata:
+  name: nginx-ingress-serviceaccount
+  namespace: ingress-nginx
+
+---
+
+# Role for the controller
+apiVersion: rbac.authorization.k8s.io/v1
+kind: role
+metadata:
+  name: nginx-ingress-role
+  namespace: ingress-nginx
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "endpoints", "pods", "secrets", "namespaces"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["list", "watch"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses/status"]
+  verbs: ["update"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingressclasses"]
+  verbs: ["get", "list", "watch"]
+
+---
+
+# ClusterRole for the controller (additional permissions)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: clusterRole
+metadata:
+  name: nginx-ingress-cluster-role
+rules:
+- apiGroups: [""]
+  resources: ["configmaps", "endpoints", "nodes", "pods", "services", "namespaces"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses", "ingresses/status", "ingressclasses"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["services", "services/status"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["extensions"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["create", "get", "list", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["ingress-controller-leader"]
+  verbs: ["get", "update"]
+- apiGroups: [""]
+  resources: ["endpoints"]
+  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["extensions"]
+  resources: ["ingresses/status"]
+  verbs: ["update"]
+
+---
+
+# RoleBindings
+apiVersion: rbac.authorization.k8s.io/v1
+kind: roleBinding
+metadata:
+  name: nginx-ingress-role-nisa-binding
+  namespace: ingress-nginx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: role
+  name: nginx-ingress-role
+subjects:
+- kind: serviceAccount
+  name: nginx-ingress-serviceaccount
+  namespace: ingress-nginx
+
+---
+
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: clusterRoleBinding
+metadata:
+  name: nginx-ingress-clusterrole-nisa-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: clusterRole
+  name: nginx-ingress-cluster-role
+subjects:
+- kind: serviceAccount
+  name: nginx-ingress-serviceaccount
+  namespace: ingress-nginx
+
+---
+
+# ConfigMap for NGINX configuration (optional customizations)
+apiVersion: v1
+kind: configMap
+metadata:
+  name: nginx-configuration
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+data:
+  # Custom NGINX configuration snippets
+  proxy-body-size: "50m"
+  proxy-buffer-size: "32k"
+  proxy-buffers: "4 64k"
+  proxy-busy-buffers-size: "64k"
+  # Enable real IP headers
+  use-real-ip: "true"
+  # Set real IP from X-Forwarded-For
+  real-ip-header: "X-Forwarded-For"
+  real-ip-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+  # Timeouts
+  proxy-read-timeout: "300"
+  proxy-send-timeout: "300"
+
+---
+
+# Service for the controller
+apiVersion: v1
+kind: service
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+  annotations:
+    metallb.universe.tf/address-pool: default
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/name: ingress-nginx
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+  - name: https
+    port: 443
+    targetPort: https
+  - name: metrics
+    port: 10254
+    targetPort: metrics
+
+---
+
+# Deployment of the controller
+apiVersion: apps/v1
+kind: deployment
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: controller
+      app.kubernetes.io/name: ingress-nginx
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: controller
+        app.kubernetes.io/name: ingress-nginx
+      annotations:
+        prometheus.io/port: "10254"
+        prometheus.io/scrape: "true"
+    spec:
+      serviceAccountName: nginx-ingress-serviceaccount
+      containers:
+      - name: controller
+        image: registry.k8s.io/ingress-nginx/controller:v1.9.0
+        args:
+        - /nginx-ingress-controller
+        - --configmap=$(POD_NAMESPACE)/nginx-configuration
+        - --tcp-services-configmap=$(POD_NAMESPACE)/tcp-services
+        - --udp-services-configmap=$(POD_NAMESPACE)/udp-services
+        - --publish-service=$(POD_NAMESPACE)/ingress-nginx-controller
+        - --election-id=ingress-nginx-leader
+        - --controller-class=k8s.io/ingress-nginx
+        - --enable-ssl-passthrough
+        - --watch-ingress-without-class=true
+        - --default-backend-service=$(POD_NAMESPACE)/default-http-backend
+        ports:
+        - name: http
+          containerPort: 80
+          hostPort: 80
+        - name: https
+          containerPort: 443
+          hostPort: 443
+        - name: metrics
+          containerPort: 10254
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 10254
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 10254
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
+        securityContext:
+          allowPrivilegeEscalation: true
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - NET_BIND_SERVICE
+          runAsUser: 101
+      nodeSelector:
+        kubernetes.io/role: agent
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      terminationGracePeriodSeconds: 60
+
+---
+
+# Default backend (404 page)
+apiVersion: apps/v1
+kind: deployment
+metadata:
+  name: default-http-backend
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: default-http-backend
+    app.kubernetes.io/part-of: ingress-nginx
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: default-http-backend
+      app.kubernetes.io/part-of: ingress-nginx
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: default-http-backend
+        app.kubernetes.io/part-of: ingress-nginx
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: default-http-backend
+        image: registry.k8s.io/defaultbackend-amd64:1.5
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "20Mi"
+          limits:
+            cpu: "20m"
+            memory: "40Mi"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+
+---
+apiVersion: v1
+kind: service
+metadata:
+  name: default-http-backend
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: default-http-backend
+    app.kubernetes.io/part-of: ingress-nginx
+spec:
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app.kubernetes.io/name: default-http-backend
+    app.kubernetes.io/part-of: ingress-nginx
+
+---
+
+# Optional: TCP services configuration (for non-HTTP services like databases)
+# apiVersion: v1
+# kind: configmap
+# metadata:
+#   name: tcp-services
+#   namespace: ingress-nginx
+# data:
+#   "5432": "bizbuddy-database/postgresql:5432"  # PostgreSQL
+
+---
+
+# Optional: UDP services configuration
+# apiVersion: v1
+# kind: configmap
+# metadata:
+#   name: udp-services
+#   namespace: ingress-nginx
+# data:
+#   "53": "kube-system/coredns:53"  # DNS
+
+---
+
+# Notes:
+# - This manifest installs NGINX Ingress Controller with hostNetwork: true
+# - hostNetwork allows the controller to bind to ports 80/443 directly
+# - Required for MetalLB to work properly with LoadBalancer services
+# - If ports 80/443 are already in use, change containerPort to different values
+# - For production, consider using DaemonSet instead of Deployment

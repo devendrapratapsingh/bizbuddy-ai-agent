@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "bizbuddy-backend.fullname" . }}
+  labels:
+    {{- include "bizbuddy-backend.labels" . | nindent 4 }}
+data:
+  # Application configuration (non-sensitive)
+  NODE_ENV: {{ .Values.config.NODE_ENV | quote }}
+  PORT: {{ .Values.config.PORT | quote }}
+  HOST: {{ .Values.config.HOST | quote }}
+  DEPLOY_MODEL: {{ .Values.config.DEPLOY_MODEL | quote }}
+  LOG_LEVEL: {{ .Values.config.LOG_LEVEL | quote }}
+  LOG_FORMAT: {{ .Values.config.LOG_FORMAT | quote }}
+  LOG_OUTPUT: {{ .Values.config.LOG_OUTPUT | quote }}
+  CORS_ORIGINS: {{ .Values.config.CORS_ORIGINS | quote }}
+  SOCKET_IO_CORS_ORIGIN: {{ .Values.config.SOCKET_IO_CORS_ORIGIN | quote }}
+  MAX_CONCURRENT_CALLS: {{ .Values.config.MAX_CONCURRENT_CALLS | quote }}
+  CONVERSATION_TIMEOUT: {{ .Values.config.CONVERSATION_TIMEOUT | quote }}
+  LEAD_QUALIFICATION_THRESHOLD: {{ .Values.config.LEAD_QUALIFICATION_THRESHOLD | quote }}
+  CONVERSION_PROBABILITY_THRESHOLD: {{ .Values.config.CONVERSION_PROBABILITY_THRESHOLD | quote }}
+  DB_POOL_MAX: {{ .Values.config.DB_POOL_MAX | quote }}
+  DB_POOL_MIN: {{ .Values.config.DB_POOL_MIN | quote }}
+  DB_POOL_IDLE_TIME: {{ .Values.config.DB_POOL_IDLE_TIME | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "bizbuddy-backend.fullname" . }}-scripts
+  labels:
+    {{- include "bizbuddy-backend.labels" . | nindent 4 }}
+data:
+  wait-for-db.sh: |
+    #!/bin/sh
+    set -e
+
+    host="$1"
+    port="$2"
+    shift 2
+    cmd="$@"
+
+    until nc -z "$host" "$port"; do
+      echo "Waiting for $host:$port..."
+      sleep 2
+    done
+
+    echo "Executing: $cmd"
+    exec $cmd

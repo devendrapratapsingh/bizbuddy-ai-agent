@@ -1,0 +1,22 @@
+apiVersion: v2
+name: redis
+description: Open source, in-memory data store (key-value store)
+type: application
+version: 18.0.2
+appVersion: 7.2.4
+icon: https://raw.githubusercontent.com/bitnami/brands/main/logos/redis.svg
+keywords:
+- redis
+- database
+- cache
+home: https://github.com/bitnami/charts/tree/main/bitnami/redis
+sources:
+- https://github.com/bitnami/containers/tree/main/bitnami/redis
+maintainers:
+- name: Bitnami
+  url: https://github.com/bitnami
+  email: containers@bitnami.com
+dependencies:
+- name: common
+  version: 2.x
+  repository: oci://registry-1.docker.io/bitnamicharts

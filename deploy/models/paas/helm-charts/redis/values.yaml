@@ -1,0 +1,178 @@
+# Redis Helm Chart Values
+# Based on Bitnami Redis with BizBuddy customizations
+
+global:
+  redis:
+    password: "redis"  # ⚠️ Change in production!
+
+# Primary master configuration
+primary:
+  replicaCount: 1
+
+  persistence:
+    enabled: true
+    storageClass: "local-path"
+    accessMode: "ReadWriteOnce"
+    size: "2Gi"
+
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+
+  # Redis configuration
+  configuration: |
+    # Memory settings
+    maxmemory 1gb
+    maxmemory-policy allkeys-lru
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+    # AOF
+    appendonly yes
+    appendfsync everysec
+    # Networking
+    bind 0.0.0.0
+    protected-mode yes
+    # Logging
+    loglevel notice
+    # Performance
+    tcp-keepalive 300
+    # Clients
+    maxclients 10000
+
+  # Service
+  service:
+    type: ClusterIP
+    port: 6379
+    nodePorts:
+      redis: ""
+
+  # Network policy
+  networkPolicy:
+    enabled: false  # Set to true in prod
+    allowExternal: true
+
+  # Security context
+  securityContext:
+    enabled: true
+    fsGroup: 1001
+    runAsUser: 1001
+
+  containerSecurityContext:
+    enabled: true
+    runAsNonRoot: true
+    runAsUser: 1001
+
+  # Pod disruption budget
+  podDisruptionBudget:
+    enabled: false  # Enable in prod
+    minAvailable: 1
+
+# Read replicas (for scaling reads)
+replica:
+  replicaCount: 0  # Set to 2+ in prod for HA
+
+  persistence:
+    enabled: true
+    storageClass: "local-path"
+    accessMode: "ReadWriteOnce"
+    size: "2Gi"
+
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "2Gi"
+
+  # Replica-specific config (readonly)
+  configuration: |
+    replica-read-only yes
+    replica-serve-stale-data yes
+
+# Redis Sentinel (for automatic failover)
+sentinel:
+  enabled: false  # Enable in prod for HA
+  quorum: 2
+  monitoring:
+    enabled: true
+    image:
+      registry: docker.io
+      repository: bitnami/redis-exporter
+      tag: 1.14.0-debian-11-r9
+      pullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+      limits:
+        cpu: "200m"
+        memory: "256Mi"
+
+# Metrics (Prometheus exporter)
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: false  # Set to true when Prometheus is installed
+    additionalLabels:
+      release: prometheus
+    namespace: monitoring
+    interval: 30s
+    scrapeTimeout: 10s
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+# Node selector and tolerations
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+priorityClassName: ""
+commonLabels: {}
+commonAnnotations: {}
+
+image:
+  registry: docker.io
+  repository: bitnami/redis
+  tag: 7.2.4-debian-11-r14
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# Init container (for sysctl settings if needed)
+initContainer:
+  enabled: false
+  image:
+    registry: docker.io
+    repository: bitnami/redis
+    tag: 7.2.4-debian-11-r14
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+---
+# Production recommendations:
+# - Enable sentinel for HA (set sentinel.enabled=true)
+# - Increase replicas to 2+ for read scaling
+# - Enable metrics for monitoring
+# - Use larger storage (10-20Gi)
+# - Increase memory limits based on dataset size
+# - Enable networkPolicy to restrict access
+# - Configure password via external secrets
+# - Consider using Redis Cluster for >100k QPS

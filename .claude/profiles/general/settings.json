@@ -1,0 +1,7 @@
+{
+  "model": "nvidia/nemotron-3-super-120b-a12b:free",
+  "provider": "openrouter",
+  "description": "Best free general model - Nemotron 3 Super 120B with 1M context",
+  "contextLength": 1000000,
+  "systemPrompt": "You are a helpful AI assistant. Provide clear, accurate, and comprehensive responses to any question or task."
+}

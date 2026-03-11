@@ -1,0 +1,104 @@
+# Staging environment values (cloud or pre-production cluster)
+
+global:
+  deploymentModel: paas
+  environment: staging
+
+# Backend - staging configuration
+bizbuddy-backend:
+  replicaCount: 2
+
+  image:
+    tag: staging
+    pullPolicy: IfNotPresent
+
+  ingress:
+    enabled: true
+    className: "nginx"
+    hosts:
+      - host: api-staging.bizbuddy.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - hosts:
+          - api-staging.bizbuddy.com
+        secretName: bizbuddy-tls
+
+  service:
+    type: ClusterIP
+
+  resources:
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+    requests:
+      memory: "512Mi"
+      cpu: "500m"
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 85
+
+  config:
+    NODE_ENV: "production"
+    PORT: "3000"
+    HOST: "0.0.0.0"
+    DEPLOY_MODEL: "paas"
+    LOG_LEVEL: "info"
+    LOG_FORMAT: "json"
+    CORS_ORIGINS: "https://app-staging.bizbuddy.com"
+    MAX_CONCURRENT_CALLS: "10"
+
+  pdb:
+    create: true
+    minAvailable: 1
+
+  # Use external managed database in staging
+  database:
+    external: true
+    host: "staging-db.cluster-xyz.us-east-1.rds.amazonaws.com"
+    port: 5432
+    existingSecret: "postgresql-secret"
+    secretKey: "postgresql-password"
+
+  redis:
+    external: true
+    url: "redis://:password@staging-redis.clustercfg.use1.cache.amazonaws.com:6379"
+    existingSecret: "redis-secret"
+    secretKey: "redis-password"
+
+# Frontend - staging configuration
+bizbuddy-frontend:
+  replicaCount: 2
+
+  image:
+    tag: staging
+    pullPolicy: IfNotPresent
+
+  ingress:
+    enabled: true
+    className: "nginx"
+    hosts:
+      - host: app-staging.bizbuddy.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - hosts:
+          - app-staging.bizbuddy.com
+        secretName: bizbuddy-tls
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+
+  config:
+    REACT_APP_API_URL: "https://api-staging.bizbuddy.com"
+    REACT_APP_USE_SSL: "true"
+    REACT_APP_SOCKET_URL: "https://api-staging.bizbuddy.com"

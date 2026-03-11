@@ -1,0 +1,86 @@
+# Development environment values for k3s local cluster
+
+global:
+  deploymentModel: paas
+  environment: development
+
+# Backend configuration
+bizbuddy-backend:
+  replicaCount: 1
+
+  image:
+    tag: dev
+    pullPolicy: IfNotPresent
+
+  ingress:
+    enabled: false  # Use port-forward for local dev
+
+  service:
+    type: ClusterIP
+
+  resources:
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+
+  autoscaling:
+    enabled: false
+
+  config:
+    NODE_ENV: "development"
+    PORT: "3000"
+    HOST: "0.0.0.0"
+    DEPLOY_MODEL: "paas"
+    LOG_LEVEL: "debug"
+    LOG_FORMAT: "pretty"
+    CORS_ORIGINS: "*"
+    MAX_CONCURRENT_CALLS: "5"
+
+  # For development, create secrets manually:
+  # kubectl create secret generic bizbuddy-secrets \
+  #   --from-literal=jwt-secret='dev-secret' \
+  #   --from-literal=openai-api-key='sk-...' \
+  #   --namespace=bizbuddy
+
+  database:
+    external: true
+    host: "localhost"  # Use port-forward for local postgres
+    port: 5432
+    existingSecret: "bizbuddy-secrets"
+    secretKey: "postgresql-password"
+
+  redis:
+    external: true
+    url: "redis://localhost:6379"
+    existingSecret: "bizbuddy-secrets"
+    secretKey: "redis-password"
+
+# Frontend configuration
+bizbuddy-frontend:
+  replicaCount: 1
+
+  image:
+    tag: dev
+    pullPolicy: IfNotPresent
+
+  ingress:
+    enabled: false
+
+  service:
+    type: ClusterIP
+
+  resources:
+    limits:
+      memory: "128Mi"
+      cpu: "200m"
+    requests:
+      memory: "64Mi"
+      cpu: "100m"
+
+  config:
+    REACT_APP_API_URL: "http://localhost:3000"
+    REACT_APP_USE_SSL: "false"
+    REACT_APP_SOCKET_URL: "http://localhost:3000"

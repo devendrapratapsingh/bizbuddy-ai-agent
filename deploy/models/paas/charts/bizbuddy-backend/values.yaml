@@ -1,0 +1,226 @@
+# Default values for bizbuddy-backend
+# These values are overridden by environment-specific values files
+
+global:
+  deploymentModel: paas
+  environment: development
+
+replicaCount: 1
+
+image:
+  repository: bizbuddy-backend
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: "bizbuddy-backend"
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: "bizbuddy-backend"
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false  # Set to true if uploads moved to external storage
+
+service:
+  type: ClusterIP
+  port: 3000
+  targetPort: 3000
+  protocol: TCP
+  annotations: {}
+  # Example for AWS ALB (uncomment and configure):
+  # service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+  # service.beta.kubernetes.io/aws-load-balancer-scheme: "internal"
+
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    # For production, add these:
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # nginx.ingress.kubernetes.io/proxy-body-size: "50M"
+    # nginx.ingress.kubernetes.io/configuration-snippet: |
+    #   location /socket.io/ {
+    #     proxy_pass http://bizbuddy-backend;
+    #     proxy_http_version 1.1;
+    #     proxy_set_header Upgrade $http_upgrade;
+    #     proxy_set_header Connection "upgrade";
+    #     proxy_set_header Host $host;
+    #     proxy_set_header X-Real-IP $remote_addr;
+    #     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    #     proxy_set_header X-Forwarded-Proto $scheme;
+    #     proxy_read_timeout 86400;
+    #   }
+  hosts:
+    - host: bizbuddy.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  limits:
+    memory: "1Gi"
+    cpu: "1000m"
+  requests:
+    memory: "512Mi"
+    cpu: "500m"
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  customMetrics: []
+
+readinessProbe:
+  enabled: true
+  path: /health
+  port: 3000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 3
+
+livenessProbe:
+  enabled: true
+  path: /health
+  port: 3000
+  initialDelaySeconds: 60
+  periodSeconds: 20
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 3
+
+startupProbe:
+  enabled: false
+  path: /health
+  port: 3000
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 5
+  successThreshold: 1
+  failureThreshold: 30
+
+volumes: []
+volumeMounts: []
+
+nodeSelector: {}
+tolerations: []
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: bizbuddy-backend
+          topologyKey: kubernetes.io/hostname
+
+# Database (using external database, not embedded)
+database:
+  external: true
+  existingSecret: "postgresql-secret"
+  secretKey: "postgresql-password"
+
+# Redis (using external redis)
+redis:
+  external: true
+  existingSecret: "redis-secret"
+  secretKey: "redis-password"
+  url: "redis://:${REDIS_PASSWORD}@redis-master:6379"
+
+# Application configuration passed as environment variables
+config:
+  # Core
+  NODE_ENV: "production"
+  PORT: "3000"
+  HOST: "0.0.0.0"
+  DEPLOY_MODEL: "paas"
+
+  # Database (will be overridden by external secret)
+  DATABASE_URL: ""
+
+  # Redis (will be overridden by external secret)
+  REDIS_URL: ""
+
+  # JWT (must set via secret)
+  JWT_SECRET: ""
+
+  # OpenAI API Key (must set via secret)
+  OPENAI_API_KEY: ""
+
+  # Socket.IO
+  SOCKET_IO_SECRET: ""
+  SOCKET_IO_CORS_ORIGIN: "*"
+
+  # Logging
+  LOG_LEVEL: "info"
+  LOG_FORMAT: "json"
+  LOG_OUTPUT: "stdout"
+
+  # CORS
+  CORS_ORIGINS: ""
+
+  # Application limits
+  MAX_CONCURRENT_CALLS: "10"
+  CONVERSATION_TIMEOUT: "3600"
+  LEAD_QUALIFICATION_THRESHOLD: "0.5"
+  CONVERSION_PROBABILITY_THRESHOLD: "0.3"
+
+  # Database pooling
+  DB_POOL_MAX: "20"
+  DB_POOL_MIN: "5"
+  DB_POOL_IDLE_TIME: "10000"
+
+# How many seconds to wait for pods to be ready
+rollout:
+  waitTimeout: 300
+  waitForLoadBalancer: false
+
+# Pod disruption budget (optional, enables if minAvailable > 0)
+pdb:
+  create: false
+  minAvailable: 1
+  # maxUnavailable: 1  # Use instead of minAvailable
+
+# Horizontal Pod Autoscaler
+hpa:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

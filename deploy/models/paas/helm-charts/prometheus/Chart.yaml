@@ -1,0 +1,23 @@
+apiVersion: v2
+name: prometheus
+description: Prometheus is a monitoring system and time series database
+type: application
+version: 15.0.0
+appVersion: 2.48.0
+icon: https://raw.githubusercontent.com/bitnami/brands/main/logos/prometheus.svg
+keywords:
+- prometheus
+- monitoring
+- metrics
+- timeseries
+home: https://github.com/bitnami/charts/tree/main/bitnami/prometheus
+sources:
+- https://github.com/bitnami/containers/tree/main/bitnami/prometheus
+maintainers:
+- name: Bitnami
+  url: https://github.com/bitnami
+  email: containers@bitnami.com
+dependencies:
+- name: common
+  version: 2.x
+  repository: oci://registry-1.docker.io/bitnamicharts

@@ -1,0 +1,87 @@
+---
+# MetalLB Configuration for Load Balancing on Bare Metal/k3s
+# This provides "LoadBalancer" type services on your laptop cluster
+# IMPORTANT: You MUST edit this file to match your local network!
+
+apiVersion: v1
+kind: configmap
+metadata:
+  namespace: metallb-system
+  name: config
+data:
+  config: |
+    peers:
+    # For L2 mode (Layer 2 - most common for home/lab):
+    # Use your machine's IP address
+    - address: 192.168.1.100  # ⚠️ CHANGE THIS to your machine's LAN IP
+      peer-address: 192.168.1.100
+
+    address-pools:
+    - name: default
+      protocol: layer2
+      # IP range for LoadBalancer services
+      # Must be in your LAN subnet and NOT conflict with existing devices
+      # Example: If your router is 192.168.1.1, avoid .1-.50
+      addresses:
+      - 192.168.1.200-192.168.1.250  # ⚠️ CHANGE THIS to available IPs in your network
+
+---
+
+# Alternative: BGP mode (for advanced setups with BGP-capable router)
+# Uncomment and configure if you have BGP router
+#
+# apiVersion: v1
+# kind: configmap
+# metadata:
+#   namespace: metallb-system
+#   name: config
+# data:
+#   config: |
+#     peers:
+#     - peer-address: 192.168.1.1  # Your router's BGP IP
+#       peer-asn: 65001
+#       my-asn: 65002
+#     address-pools:
+#     - name: default
+#       protocol: bgp
+#       addresses:
+#       - 192.168.1.200-192.168.1.250
+#       # Optional: announce specific prefixes
+#       # announce:
+#       #   - 192.168.1.0/24
+
+---
+
+# Instructions to use this config:
+# 1. Find your LAN IP:
+#    - Linux: ip a | grep inet
+#    - macOS: ifconfig | grep "inet "
+#    - Windows: ipconfig
+#
+# 2. Update the address field in "peers" to your machine's IP
+#
+# 3. Choose an IP range for LoadBalancer services:
+#    - Pick 10-20 IPs that are NOT used by other devices
+#    - Typically: .200-.250 if your DHCP starts at .100
+#    - Make sure these IPs are in your LAN subnet
+#
+# 4. Apply the config:
+#    kubectl apply -f infra/metallb-config.yaml
+#
+# 5. Verify:
+#    kubectl get pods -n metallb-system
+#    kubectl get configmap/config -n metallb-system -o yaml
+#
+# 6. Test with a service:
+#    kubectl expose deployment nginx --port=80 --type=LoadBalancer
+#    kubectl get svc nginx
+#    # Should show EXTERNAL-IP from your configured range
+
+---
+
+# Troubleshooting:
+# - If pods are CrashLoopBackOff: Check IP configuration
+# - If LoadBalancer IP not assigned: Ensure MetalLB speaker has hostNetwork:true
+# - If ARP conflicts: Use IPs that are not assigned via DHCP
+# - For WiFi: May need to enable bridge-nf-call-iptables:
+#   sudo sysctl -w net.bridge.bridge-nf-call-iptables=1

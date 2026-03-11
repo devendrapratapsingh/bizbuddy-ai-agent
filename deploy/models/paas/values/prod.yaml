@@ -1,0 +1,197 @@
+# Production environment values (high availability)
+
+global:
+  deploymentModel: paas
+  environment: production
+
+# Backend - production HA configuration
+bizbuddy-backend:
+  replicaCount: 3
+
+  image:
+    tag: production
+    pullPolicy: IfNotPresent
+
+  imagePullSecrets:
+    - name: ecr-registry-secret  # For AWS ECR; adjust for your registry
+
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/proxy-body-size: "50M"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/configuration-snippet: |
+        location /socket.io/ {
+          proxy_pass http://bizbuddy-backend;
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection "upgrade";
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_read_timeout 86400;
+        }
+    hosts:
+      - host: api.bizbuddy.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - hosts:
+          - api.bizbuddy.com
+        secretName: bizbuddy-tls-production
+
+  service:
+    type: ClusterIP
+
+  resources:
+    limits:
+      memory: "2Gi"
+      cpu: "2000m"
+    requests:
+      memory: "1Gi"
+      cpu: "1000m"
+
+  # Enable Horizontal Pod Autoscaler
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  config:
+    NODE_ENV: "production"
+    PORT: "3000"
+    HOST: "0.0.0.0"
+    DEPLOY_MODEL: "saas"
+    LOG_LEVEL: "warn"
+    LOG_FORMAT: "json"
+    LOG_OUTPUT: "stdout"
+    CORS_ORIGINS: "https://app.bizbuddy.com"
+    MAX_CONCURRENT_CALLS: "50"
+    CONVERSATION_TIMEOUT: "7200"
+    DB_POOL_MAX: "50"
+    DB_POOL_MIN: "10"
+    DB_POOL_IDLE_TIME: "10000"
+
+  # Strong security settings
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    seccompProfile:
+      type: RuntimeDefault
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false  # Set to true if uploads moved to S3
+
+  # Ensure high availability
+  pdb:
+    create: true
+    minAvailable: 2  # At least 2 pods always available during disruptions
+
+  # Pod Anti-affinity for spreading across nodes
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: bizbuddy-backend
+            topologyKey: kubernetes.io/hostname
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: bizbuddy-backend
+            topologyKey: topology.kubernetes.io/zone
+
+  # Use managed database with high availability
+  database:
+    external: true
+    host: "${DB_HOST}"  # Set via terraform/external script
+    port: 5432
+    existingSecret: "postgresql-secret"
+    secretKey: "postgresql-password"
+
+  # Use managed Redis cluster
+  redis:
+    external: true
+    url: "${REDIS_URL}"  # Set via terraform
+    existingSecret: "redis-secret"
+    secretKey: "redis-password"
+
+  nodeSelector:
+    node-role: "worker"  # Schedule on worker nodes only
+
+# Frontend - production configuration
+bizbuddy-frontend:
+  replicaCount: 3
+
+  image:
+    tag: production
+    pullPolicy: IfNotPresent
+
+  imagePullSecrets:
+    - name: ecr-registry-secret
+
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/proxy-body-size: "50M"
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: app.bizbuddy.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - hosts:
+          - app.bizbuddy.com
+        secretName: bizbuddy-tls-production
+
+  service:
+    type: ClusterIP
+
+  resources:
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
+    requests:
+      memory: "128Mi"
+      cpu: "200m"
+
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+
+  config:
+    REACT_APP_API_URL: "https://api.bizbuddy.com"
+    REACT_APP_USE_SSL: "true"
+    REACT_APP_SOCKET_URL: "https://api.bizbuddy.com"
+
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: bizbuddy-frontend
+            topologyKey: kubernetes.io/hostname

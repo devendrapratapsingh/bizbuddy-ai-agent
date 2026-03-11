@@ -1,0 +1,112 @@
+{
+  "keybindings": [
+    {
+      "key": "ctrl+shift+i",
+      "command": "invokeSkill",
+      "args": "infrastructure-as-code",
+      "description": "Invoke Infrastructure as Code skill"
+    },
+    {
+      "key": "ctrl+shift+c",
+      "command": "invokeSkill",
+      "args": "code-review",
+      "description": "Invoke Code Review skill"
+    },
+    {
+      "key": "ctrl+shift+s",
+      "command": "invokeSkill",
+      "args": "security",
+      "description": "Invoke Security skill"
+    },
+    {
+      "key": "ctrl+shift+d",
+      "command": "invokeSkill",
+      "args": "debugger",
+      "description": "Invoke Debugger skill"
+    },
+    {
+      "key": "ctrl+shift+p",
+      "command": "invokeSkill",
+      "args": "planner",
+      "description": "Invoke Planner skill"
+    },
+    {
+      "key": "ctrl+shift+k",
+      "command": "invokeSkill",
+      "args": "k8s",
+      "description": "Invoke Kubernetes skill"
+    },
+    {
+      "key": "ctrl+shift+t",
+      "command": "invokeSkill",
+      "args": "code-test",
+      "description": "Invoke Code Test skill"
+    },
+    {
+      "key": "ctrl+shift+o",
+      "command": "invokeSkill",
+      "args": "orchestrator",
+      "description": "Invoke Orchestrator skill"
+    },
+    {
+      "key": "ctrl+shift+m",
+      "command": "invokeSkill",
+      "args": "mlops",
+      "description": "Invoke MLOps skill"
+    },
+    {
+      "key": "ctrl+shift+f",
+      "command": "invokeSkill",
+      "args": "finops",
+      "description": "Invoke FinOps skill"
+    },
+    {
+      "key": "ctrl+shift+r",
+      "command": "invokeSkill",
+      "args": "sre",
+      "description": "Invoke SRE skill"
+    },
+    {
+      "key": "ctrl+shift+v",
+      "command": "invokeSkill",
+      "args": "plan-peer-verifier",
+      "description": "Invoke Plan Peer Verifier skill"
+    },
+    {
+      "key": "ctrl+shift+j",
+      "command": "invokeSkill",
+      "args": "java-sdlc",
+      "description": "Invoke Java SDLC skill"
+    },
+    {
+      "key": "ctrl+shift+y",
+      "command": "invokeSkill",
+      "args": "python-sdlc",
+      "description": "Invoke Python SDLC skill"
+    },
+    {
+      "key": "ctrl+shift+u",
+      "command": "invokeSkill",
+      "args": "rust-sdlc",
+      "description": "Invoke Rust SDLC skill"
+    },
+    {
+      "key": "ctrl+shift+n",
+      "command": "invokeSkill",
+      "args": "nodejs-sdlc",
+      "description": "Invoke Node.js SDLC skill"
+    },
+    {
+      "key": "ctrl+shift+a",
+      "command": "invokeSkill",
+      "args": "ai-patterns",
+      "description": "Invoke AI Patterns skill"
+    },
+    {
+      "key": "ctrl+shift+g",
+      "command": "invokeSkill",
+      "args": "rag-systems",
+      "description": "Invoke RAG Systems skill"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "model": "google/gemma-3-27b-it:free",
+  "provider": "openrouter",
+  "description": "Best free creative model - Gemma 3 27B with 131K context",
+  "contextLength": 131072,
+  "systemPrompt": "You are a creative writing assistant. Be imaginative, expressive, and help craft engaging content with vivid language and original ideas."
+}

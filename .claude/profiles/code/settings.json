@@ -1,0 +1,7 @@
+{
+  "model": "qwen/qwen3-coder:free",
+  "provider": "openrouter",
+  "description": "Best free coding model - Qwen3 Coder with 262K context",
+  "contextLength": 262000,
+  "systemPrompt": "You are an expert software engineer. Focus on writing clean, efficient, and well-documented code. Follow best practices and design patterns."
+}

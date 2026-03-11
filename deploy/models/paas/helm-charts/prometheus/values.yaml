@@ -1,0 +1,301 @@
+# Prometheus Helm Chart Values
+# Simplified configuration for BizBuddy demo
+
+global:
+  # Default values for all Prometheus components
+
+# Prometheus server configuration
+server:
+  replicaCount: 1  # Single replica for dev
+
+  # Persistent storage
+  persistentVolume:
+    enabled: true
+    storageClass: "local-path"
+    accessModes:
+      - ReadWriteOnce
+    size: "5Gi"  # For demo; increase to 100Gi+ for production
+
+  # Resource limits
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+
+  # Configuration
+  config:
+    # Scrape interval
+    global:
+      scrape_interval: "15s"
+      evaluation_interval: "15s"
+      external_labels:
+        cluster: "bizbuddy-dev"
+        environment: "development"
+    # Alertmanager configuration
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+              - alertmanager:9093
+    # Rule files
+    rule_files:
+      - "etc/prometheus/rules/*.yaml"
+    # Scrape configurations
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      - job_name: 'kubernetes-apiservers'
+        kubernetes_sd_configs:
+          - role: endpoints
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: default;kubernetes;https
+      - job_name: 'kubernetes-nodes'
+        kubernetes_sd_configs:
+          - role: node
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+
+  # Extra flags
+  extraFlags:
+    - --web.enable-lifecycle
+    - --web.enable-admin-api
+
+  # Extra volumes
+  extraVolumes: []
+  extraVolumeMounts: []
+
+# Alertmanager (basic setup)
+alertmanager:
+  enabled: true
+  replicaCount: 1
+
+  persistentVolume:
+    enabled: true
+    storageClass: "local-path"
+    accessModes:
+      - ReadWriteOnce
+    size: "1Gi"
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+  # Alertmanager configuration
+  config:
+    global:
+      resolve_timeout: "5m"
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: 'default'
+    receivers:
+      - name: 'default'
+        # For demo, just log alerts
+        # In prod, configure email, Slack, PagerDuty
+        # email_configs:
+        #   - to: 'team@example.com'
+        #     from: 'prometheus@example.com'
+        #     smarthost: 'smtp.example.com:587'
+        #     auth_username: 'user'
+        #     auth_password: 'password'
+
+# Pushgateway (optional, for short-lived jobs)
+pushgateway:
+  enabled: false  # Enable if needed for batch jobs
+
+# Node exporter (for host metrics)
+nodeExporter:
+  enabled: true
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+  hostNetwork: true
+  hostPID: true
+  rbac:
+    create: true
+    pspEnabled: false
+
+  securityContext:
+    enabled: true
+    runAsNonRoot: true
+    runAsUser: 65534
+    privileged: false
+    capabilities:
+      add:
+        - SYS_TIME
+        - SYS_PTRACE
+
+# Kube state metrics (K8s cluster metrics)
+kubeStateMetrics:
+  enabled: true
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+  rbac:
+    create: true
+    pspEnabled: false
+
+# ServiceMonitor (enables auto-discovery of services to monitor)
+# Set to false if not using Prometheus Operator
+# We're using plain Prometheus, so we configure scrape configs manually
+
+# Pod monitor (for our application pods)
+# podMonitor:
+#   enabled: true
+#   additionalLabels:
+#     release: prometheus
+#   namespace: bizbuddy
+#   selector:
+#     matchLabels:
+#       app: bizbuddy-backend
+#   interval: 30s
+
+# ServiceMonitor (for our application services)
+# serviceMonitor:
+#   enabled: true
+#   additionalLabels:
+#     release: prometheus
+#   namespace: bizbuddy
+#   selector:
+#     matchLabels:
+#       app: bizbuddy-backend
+#   interval: 30s
+
+# API (enable Prometheus API access)
+api:
+  enabled: true
+  ingress:
+    enabled: false  # Set to true to expose Prometheus UI via ingress
+    annotations:
+      kubernetes.io/ingress.class: nginx
+    hosts:
+      - prometheus.bizbuddy.local
+    tls: []
+
+# Web UI
+web:
+  ingress:
+    enabled: false  # Set to true to expose
+    annotations:
+      kubernetes.io/ingress.class: nginx
+    hosts:
+      - prometheus.bizbuddy.local
+    tls: []
+
+# Configuration reload (hot reload without restart)
+reloadDaemon:
+  enabled: false  # Can enable for auto-reload on config changes
+
+# Network policy
+networkPolicy:
+  enabled: false
+
+# Pod security context
+securityContext:
+  enabled: true
+  fsGroup: 1001
+  runAsUser: 1001
+
+containerSecurityContext:
+  enabled: true
+  runAsNonRoot: true
+  runAsUser: 1001
+
+# Node selector and tolerations
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+priorityClassName: ""
+commonLabels: {}
+commonAnnotations: {}
+
+# Image configuration
+image:
+  registry: docker.io
+  repository: bitnami/prometheus
+  tag: 2.48.0-debian-12-r1
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# Init container
+initContainer:
+  image:
+    registry: docker.io
+    repository: bitnami/prometheus
+    tag: 2.48.0-debian-12-r1
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+---
+# For production:
+# - Increase replicaCount to 2+ for HA (requires persistent shared storage like NFS)
+# - Use remote Write to long-term storage (Thanos, Cortex)
+# - Enable Alertmanager with real receivers (email, Slack, PagerDuty)
+# - Set up recording rules for expensive queries
+# - Configure proper retention based on storage capacity
+# - Enable Thanos sidecar for multi-cluster federation

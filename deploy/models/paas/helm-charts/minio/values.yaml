@@ -1,0 +1,245 @@
+# MinIO Helm Chart Values
+# S3-compatible object storage for BizBuddy
+
+global:
+  minio:
+    # Access credentials (⚠️ Change in production!)
+    accessKey: "minioadmin"
+    secretKey: "minioadmin"
+
+# Deployment configuration
+replicaCount: 1  # For dev; set to 4 for distributed mode in prod
+
+# Persistent storage
+persistence:
+  enabled: true
+  storageClass: "local-path"
+  accessMode: "ReadWriteOnce"
+  size: "10Gi"
+  # For distributed mode, you need multiple PVCs (one per pod)
+
+# Resource limits
+resources:
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+  limits:
+    cpu: "1000m"
+    memory: "2Gi"
+
+# Service configuration
+service:
+  type: ClusterIP  # Use Ingress for external access
+  ports:
+    api: 9000
+    console: 9001
+  nodePorts:
+    api: ""
+    console: ""
+
+# Network policy
+networkPolicy:
+  enabled: false  # Enable in prod
+
+# Security context
+securityContext:
+  enabled: true
+  fsGroup: 1001
+  runAsUser: 1001
+
+containerSecurityContext:
+  enabled: true
+  runAsNonRoot: true
+  runAsUser: 1001
+
+# MinIO configuration (environment variables)
+configuration:
+  # Minimum required config
+  MINIO_DISTRIBUTED_MODE: ""  # Set to "single" for single node, "server" for distributed
+  MINIO_ACCESS_KEY: $(GLOBAL_MINIO_ACCESS_KEY)
+  MINIO_SECRET_KEY: $(GLOBAL_MINIO_SECRET_KEY)
+  # For distributed mode with 4 pods:
+  # MINIO_DISTRIBUTED_NODES: "minio-0.minio.minio.svc.cluster.local/data/minio{0...3}"
+  # MINIO_DISTRIBUTED_MODE: "server"
+  # Browser access
+  MINIO_BROWSER: "on"
+  MINIO_REGION_NAME: "us-east-1"
+  MINIO_SERVER_URL: "http://minio.minio.svc.cluster.local:9000"
+
+# Buckets to create automatically
+buckets:
+  - name: "bizbuddy-uploads"
+    policy: "none"
+    region: "us-east-1"
+  - name: "bizbuddy-recordings"
+    policy: "none"
+    region: "us-east-1"
+  - name: "bizbuddy-backups"
+    policy: "none"
+    region: "us-east-1"
+
+# Users and policies
+users:
+  - name: "bizbuddy"
+    accessKey: "bizbuddy"
+    secretKey: "bizbuddy"  # ⚠️ Change in production!
+    policies:
+      - name: "readwrite"
+        policy: |
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Action": [
+                  "s3:*"
+                ],
+                "Effect": "Allow",
+                "Resource": [
+                  "arn:aws:s3:::bizbuddy-uploads",
+                  "arn:aws:s3:::bizbuddy-uploads/*",
+                  "arn:aws:s3:::bizbuddy-recordings",
+                  "arn:aws:s3:::bizbuddy-recordings/*",
+                  "arn:aws:s3:::bizbuddy-backups",
+                  "arn:aws:s3:::bizbuddy-backups/*"
+                ]
+              }
+            ]
+          }
+
+# Policies (custom IAM-like policies)
+policies:
+  - name: "readwrite"
+    values: |
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": [
+              "s3:*"
+            ],
+            "Resource": [
+              "arn:aws:s3:::*"
+            ]
+          }
+        ]
+      }
+
+# Pod disruption budget
+podDisruptionBudget:
+  enabled: false  # Enable in prod, especially for distributed mode
+  minAvailable: 1
+
+# Pod anti-affinity (spread across nodes)
+podAntiAffinity:
+  enabled: false  # Enable in distributed mode
+
+  topologyKey: "kubernetes.io/hostname"
+
+# Node selector and tolerations
+nodeSelector: {}
+tolerations: []
+
+priorityClassName: ""
+commonLabels: {}
+commonAnnotations: {}
+
+image:
+  registry: docker.io
+  repository: bitnami/minio
+  tag: 2024.1.24-debian-11-r1
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+# Init container (for sysctl settings)
+initContainer:
+  enabled: false
+  image:
+    registry: docker.io
+    repository: bitnami/minio
+    tag: 2024.1.24-debian-11-r1
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+# Metrics (Prometheus)
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: false  # Set to true when Prometheus is installed
+    additionalLabels:
+      release: prometheus
+    namespace: monitoring
+    interval: 30s
+    scrapeTimeout: 10s
+
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+
+# Ingress (optional - for MinIO console access)
+ingress:
+  enabled: false  # Set to true to expose MinIO console via ingress
+  className: "nginx"
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"  # For TLS
+  hosts:
+    - host: minio.bizbuddy.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+          port: 9001
+  tls: []
+
+# Probes
+probes:
+  liveness:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 1
+    successThreshold: 1
+    failureThreshold: 3
+  startup:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    successThreshold: 1
+    failureThreshold: 3
+
+---
+# Production considerations:
+# 1. Enable distributed mode with 4+ replicas for HA
+# 2. Use multiple PersistentVolumeClaims (one per pod)
+# 3. Enable podAntiAffinity to spread pods across nodes
+# 4. Enable podDisruptionBudget
+# 5. Enable networkPolicy
+# 6. Use external secret management for credentials
+# 7. Configure bucket lifecycle policies (expire old files)
+# 8. Enable TLS for S3 API and console
+# 9. Set up bucket replication across regions
+# 10. Monitor disk usage and set up alerts
+
+# For distributed mode, you need:
+# - At least 4 pods
+# - 4 separate PVCs (erasure coding requires even number)
+# - Set MINIO_DISTRIBUTED_MODE and MINIO_DISTRIBUTED_NODES
+# - Use StatefulSet with stable network IDs

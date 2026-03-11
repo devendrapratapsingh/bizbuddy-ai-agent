@@ -1,0 +1,193 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "bizbuddy-backend.fullname" . }}
+  labels:
+    {{- include "bizbuddy-backend.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "bizbuddy-backend.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  minReadySeconds: 30
+  progressDeadlineSeconds: 600
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if .Values.podAnnotations }}
+        {{- toYaml .Values.podAnnotations | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "bizbuddy-backend.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with include "bizbuddy-backend.imagePullSecrets" . }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "bizbuddy-backend.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.config.NODE_ENV | quote }}
+            - name: PORT
+              value: {{ .Values.config.PORT | quote }}
+            - name: HOST
+              value: {{ .Values.config.HOST | quote }}
+            - name: DEPLOY_MODEL
+              value: {{ .Values.config.DEPLOY_MODEL | quote }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.existingSecret | default (include "bizbuddy-backend.fullname" .) }}
+                  key: {{ .Values.database.secretKey | default "postgresql-password" }}
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.redis.existingSecret | default "redis-secret" }}
+                  key: {{ .Values.redis.secretKey | default "redis-password" }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.config.JWT_SECRET | default (include "bizbuddy-backend.fullname" .) }}
+                  key: "jwt-secret"
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.config.OPENAI_API_KEY | default (include "bizbuddy-backend.fullname" .) }}
+                  key: "openai-api-key"
+            - name: SOCKET_IO_SECRET
+              value: {{ .Values.config.SOCKET_IO_SECRET | quote }}
+            - name: SOCKET_IO_CORS_ORIGIN
+              value: {{ .Values.config.SOCKET_IO_CORS_ORIGIN | quote }}
+            - name: CORS_ORIGINS
+              value: {{ .Values.config.CORS_ORIGINS | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.config.LOG_LEVEL | quote }}
+            - name: LOG_FORMAT
+              value: {{ .Values.config.LOG_FORMAT | quote }}
+            - name: LOG_OUTPUT
+              value: {{ .Values.config.LOG_OUTPUT | quote }}
+            - name: MAX_CONCURRENT_CALLS
+              value: {{ .Values.config.MAX_CONCURRENT_CALLS | quote }}
+            - name: CONVERSATION_TIMEOUT
+              value: {{ .Values.config.CONVERSATION_TIMEOUT | quote }}
+            - name: LEAD_QUALIFICATION_THRESHOLD
+              value: {{ .Values.config.LEAD_QUALIFICATION_THRESHOLD | quote }}
+            - name: CONVERSION_PROBABILITY_THRESHOLD
+              value: {{ .Values.config.CONVERSION_PROBABILITY_THRESHOLD | quote }}
+            - name: DB_POOL_MAX
+              value: {{ .Values.config.DB_POOL_MAX | quote }}
+            - name: DB_POOL_MIN
+              value: {{ .Values.config.DB_POOL_MIN | quote }}
+            - name: DB_POOL_IDLE_TIME
+              value: {{ .Values.config.DB_POOL_IDLE_TIME | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- range .Values.volumeMounts }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+              {{- if .readOnly }}
+              readOnly: true
+              {{- end }}
+            {{- end }}
+            {{- if not .Values.securityContext.readOnlyRootFilesystem }}
+            - name: tmp
+              mountPath: /tmp
+            - name: uploads
+              mountPath: /app/uploads
+            {{- end }}
+          readinessProbe:
+            {{- if .Values.readinessProbe.enabled }}
+            httpGet:
+              path: {{ .Values.readinessProbe.path }}
+              port: {{ .Values.readinessProbe.port }}
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.readinessProbe.successThreshold }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+            {{- else }}
+            exec:
+              command:
+                - /bin/true
+            {{- end }}
+          livenessProbe:
+            {{- if .Values.livenessProbe.enabled }}
+            httpGet:
+              path: {{ .Values.livenessProbe.path }}
+              port: {{ .Values.livenessProbe.port }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            successThreshold: {{ .Values.livenessProbe.successThreshold }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+            {{- else }}
+            exec:
+              command:
+                - /bin/true
+            {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        {{- range .Values.volumes }}
+        - name: {{ .name }}
+          {{- if .persistentVolumeClaim.claimName }}
+          persistentVolumeClaim:
+            claimName: {{ .persistentVolumeClaim.claimName }}
+          {{- else if .configMap }}
+          configMap:
+            name: {{ .configMap.name }}
+            {{- if .configMap.items }}
+            items:
+              {{- toYaml .configMap.items | nindent 14 }}
+            {{- end }}
+          {{- else if .secret }}
+          secret:
+            secretName: {{ .secret.secretName }}
+            {{- if .secret.items }}
+            items:
+              {{- toYaml .secret.items | nindent 14 }}
+            {{- end }}
+          {{- end }}
+        {{- end }}
+        {{- if not .Values.securityContext.readOnlyRootFilesystem }}
+        - name: tmp
+          emptyDir: {}
+        - name: uploads
+          emptyDir: {}
+        {{- end }}
