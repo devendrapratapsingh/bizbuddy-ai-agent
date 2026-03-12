@@ -57,6 +57,26 @@ See `TOKEN-ROTATION-NEEDED.md` for full instructions.
 
 ---
 
+#### Incident 2: `claude-switcher.sh` (Discovered & Fixed: 2025-03-12)
+**File**: `claude-switcher.sh` (line 25)
+**Token**: OpenRouter API token (`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`)
+**Status**: ✅ **FIXED** - Token removed from code, replaced with env var requirement
+
+##### Actions Taken
+- Removed hardcoded token from script
+- Replaced with: `: "${OPENROUTER_API_KEY:?Please set OPENROUTER_API_KEY environment variable}"`
+- Updated pre-commit hook to detect longer API keys (OpenRouter pattern `sk-...{48,}`)
+- Updated scan-secrets.js to catch OpenAI/OpenRouter keys (48+ chars)
+- Committed fix on: `c048da3`
+
+##### Required Action
+**IMMEDIATE**: Rotate this OpenRouter token at https://openrouter.ai/keys
+- Token was hardcoded in script since initial commit (712aba4)
+- Visible to anyone with repository access
+- **Code is fixed**, but the exposed token must be rotated
+
+---
+
 ## 📋 What You Need to Do
 
 ### Immediate (Now)
