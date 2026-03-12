@@ -120,3 +120,8 @@ storybook-static
 .yarn/versions
 
 # End of https://www.gitignore.io/api/node,terraform,env,vscode,osx,linux,windows
+
+# Claude Code local settings (contains API tokens)
+.claude/settings.local.json
+.claude/profiles/*/settings.json
+!.claude/settings.example.json

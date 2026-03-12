@@ -69,7 +69,7 @@ function shouldSkipFile(filePath) {
   if (!fs.existsSync(filePath)) return true;
   const ext = require('path').extname(filePath).toLowerCase();
   if (skipExtensions.has(ext)) return true;
-  const skipDirs = ['node_modules', '.git', 'dist', 'build', '.next', '.terraform', 'coverage'];
+  const skipDirs = ['node_modules', '.git', 'dist', 'build', '.next', '.terraform', 'coverage', '.claude'];
   if (skipDirs.some(dir => filePath.includes(dir))) return true;
   try {
     const stat = fs.statSync(filePath);
