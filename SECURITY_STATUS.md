@@ -28,7 +28,32 @@
 - ✅ Pre-commit hook tested and working
 - ✅ Repository is functional and clean
 - ✅ All skills and settings intact
+- ✅ `.claude/settings.local.json` protected (untracked)
 - ✅ Working directory: `/Users/uniquenotion/Private/projects/BizBuddy`
+
+---
+
+## 🚨 Critical Incident: OpenRouter Token Exposure
+
+**Discovered**: 2025-03-12
+**File**: `.claude/settings.local.json`
+**Token**: OpenRouter API token (`sk-or-v1-...`)
+**Status**: ✅ Removed from tracking, but was in git history
+
+### Actions Taken
+- Removed file from git tracking (kept locally)
+- Added `.claude/*` to `.gitignore`
+- Updated pre-commit hook to skip `.claude/`
+- Created token rotation notice (`TOKEN-ROTATION-NEEDED.md`)
+- Created template `.claude/settings.local.json.example`
+
+### Required User Action
+**IMMEDIATE**: Rotate OpenRouter token at https://openrouter.ai/keys
+- The token was visible in initial commit
+- Even though it's now untracked, it exists in git history
+- Treat as compromised and rotate immediately
+
+See `TOKEN-ROTATION-NEEDED.md` for full instructions.
 
 ---
 
