@@ -21,7 +21,11 @@
       "Skill(plan-peer-verifier)",
       "Skill(ai-patterns)",
       "Skill(ai-ops)",
-      "Skill(debugger)"
+      "Skill(debugger)",
+      "Bash(git remove:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(chmod +x .git/hooks/pre-commit)"
     ],
     "blockedCommands": []
   },
