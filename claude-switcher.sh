@@ -22,7 +22,9 @@
 set -e
 
 # ── YOUR CONFIG ─────────────────────────────────────────────────
-OPENROUTER_API_KEY="${OPENROUTER_API_KEY:-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}"
+# OpenRouter API Key - set via environment variable or ~/.claude/settings.local.json
+# Get your key from: https://openrouter.ai/keys
+: "${OPENROUTER_API_KEY:?Please set OPENROUTER_API_KEY environment variable}"
 PROJECT_DIR="$(pwd)"
 CLAUDE_DIR="$PROJECT_DIR/.claude"
 PROFILES_DIR="$CLAUDE_DIR/profiles"

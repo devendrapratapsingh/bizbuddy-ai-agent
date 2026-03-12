@@ -22,7 +22,7 @@ const colors = {
 
 const secretPatterns = [
   { name: 'AWS Access Key', pattern: /(?:A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}/, severity: 'high' },
-  { name: 'OpenAI API Key', pattern: /sk-[a-zA-Z0-9]{48}/, severity: 'high' },
+  { name: 'OpenAI/OpenRouter API Key', pattern: /sk-[a-zA-Z0-9]{48,}/, severity: 'high' },
   { name: 'GitHub Token', pattern: /ghp_[0-9a-zA-Z]{36}/, severity: 'high' },
   { name: 'Database URL', pattern: /(postgresql|mysql|mongodb|redis):\/\/[^:]+:[^@]+@/i, severity: 'high' },
   { name: 'Hardcoded Password', pattern: /(?:password|passwd|pwd|secret)["'\s]*[:=][\s]*["']([^"'\n]{8,})["']/i, severity: 'high' },
